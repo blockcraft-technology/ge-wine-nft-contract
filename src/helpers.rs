@@ -1,27 +1,39 @@
-use schemars::JsonSchema;
-use serde::{Deserialize, Serialize};
+use cosmwasm_std::{Addr, Deps, DepsMut, StdResult, Uint128};
+use crate::state::BALANCES;
+use crate::error::ContractError;
 
-use cosmwasm_std::{to_json_binary, Addr, CosmosMsg, StdResult, WasmMsg};
-
-use crate::msg::ExecuteMsg;
-
-/// CwTemplateContract is a wrapper around Addr that provides a lot of helpers
-/// for working with this.
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq, JsonSchema)]
-pub struct CwTemplateContract(pub Addr);
-
-impl CwTemplateContract {
-    pub fn addr(&self) -> Addr {
-        self.0.clone()
+pub fn check_is_owner(deps: Deps, sender: &Addr, owner: &Addr) -> Result<(), ContractError> {
+    if sender != owner {
+        return Err(ContractError::Unauthorized {});
     }
+    Ok(())
+}
 
-    pub fn call<T: Into<ExecuteMsg>>(&self, msg: T) -> StdResult<CosmosMsg> {
-        let msg = to_json_binary(&msg.into())?;
-        Ok(WasmMsg::Execute {
-            contract_addr: self.addr().into(),
-            msg,
-            funds: vec![],
-        }
-        .into())
+pub fn update_balance(
+    deps: DepsMut,
+    owner: Addr,
+    token_id: String,
+    amount: Uint128,
+) -> StdResult<()> {
+    let current_balance = BALANCES.may_load(deps.storage, (owner.clone(), token_id.clone()))?.unwrap_or_default();
+    BALANCES.save(deps.storage, (owner, token_id), &(current_balance + amount))?;
+    Ok(())
+}
+
+pub fn decrease_balance(
+    deps: DepsMut,
+    owner: Addr,
+    token_id: String,
+    amount: Uint128,
+) -> Result<(), ContractError> {
+    let current_balance = BALANCES.load(deps.storage, (owner.clone(), token_id.clone()))?;
+    if current_balance < amount {
+        return Err(ContractError::InsufficientBalance {});
     }
+    BALANCES.save(deps.storage, (owner, token_id), &(current_balance - amount))?;
+    Ok(())
+}
+
+pub fn validate_address(deps: Deps, address: String) -> StdResult<Addr> {
+    deps.api.addr_validate(&address)
 }

@@ -1,11 +1,16 @@
-use cosmwasm_schema::{cw_serde, QueryResponses};
+use cosmwasm_std::{Uint128};
+use serde::{Deserialize, Serialize};
+use schemars::JsonSchema;
 
-#[cw_serde]
-pub struct InstantiateMsg {}
+#[derive(Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum ExecuteMsg {
+    Mint { token_id: String, owner: String, amount: Uint128 },
+    Transfer { to: String, token_id: String, amount: Uint128 },
+}
 
-#[cw_serde]
-pub enum ExecuteMsg {}
-
-#[cw_serde]
-#[derive(QueryResponses)]
-pub enum QueryMsg {}
+#[derive(Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum QueryMsg {
+    BalanceOf { owner: String, token_id: String },
+}

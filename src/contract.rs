@@ -1,41 +1,58 @@
-#[cfg(not(feature = "library"))]
-use cosmwasm_std::entry_point;
-use cosmwasm_std::{Binary, Deps, DepsMut, Env, MessageInfo, Response, StdResult};
-// use cw2::set_contract_version;
-
+use cosmwasm_std::{to_binary, Addr, Binary, Deps, DepsMut, Env, MessageInfo, Response, StdResult, Uint128};
 use crate::error::ContractError;
-use crate::msg::{ExecuteMsg, InstantiateMsg, QueryMsg};
+use crate::msg::{ExecuteMsg, QueryMsg};
+use crate::state::{OWNER};
+use crate::helpers::{check_is_owner, update_balance, decrease_balance, validate_address};
 
-/*
-// version info for migration info
-const CONTRACT_NAME: &str = "crates.io:ge-wine-nft";
-const CONTRACT_VERSION: &str = env!("CARGO_PKG_VERSION");
-*/
-
-#[cfg_attr(not(feature = "library"), entry_point)]
 pub fn instantiate(
-    _deps: DepsMut,
+    deps: DepsMut,
     _env: Env,
-    _info: MessageInfo,
-    _msg: InstantiateMsg,
-) -> Result<Response, ContractError> {
-    unimplemented!()
+    info: MessageInfo,
+) -> StdResult<Response> {
+    OWNER.save(deps.storage, &info.sender)?;
+    Ok(Response::new().add_attribute("action", "instantiate"))
 }
 
-#[cfg_attr(not(feature = "library"), entry_point)]
 pub fn execute(
-    _deps: DepsMut,
+    deps: DepsMut,
     _env: Env,
-    _info: MessageInfo,
-    _msg: ExecuteMsg,
+    info: MessageInfo,
+    msg: ExecuteMsg,
 ) -> Result<Response, ContractError> {
-    unimplemented!()
+    match msg {
+        ExecuteMsg::Mint { token_id, owner, amount } => mint(deps, info, token_id, owner, amount),
+        ExecuteMsg::Transfer { to, token_id, amount } => transfer(deps, info, to, token_id, amount),
+    }
 }
 
-#[cfg_attr(not(feature = "library"), entry_point)]
-pub fn query(_deps: Deps, _env: Env, _msg: QueryMsg) -> StdResult<Binary> {
-    unimplemented!()
+pub fn mint(
+    deps: DepsMut,
+    info: MessageInfo,
+    token_id: String,
+    owner: String,
+    amount: Uint128,
+) -> Result<Response, ContractError> {
+    let stored_owner = OWNER.load(deps.storage)?;
+    check_is_owner(deps.as_ref(), &info.sender, &stored_owner)?;
+
+    let owner_addr = validate_address(deps.as_ref(), owner)?;
+    update_balance(deps, owner_addr, token_id.clone(), amount)?;
+
+    Ok(Response::new().add_attribute("action", "mint").add_attribute("token_id", token_id))
 }
 
-#[cfg(test)]
-mod tests {}
+pub fn transfer(
+    mut deps: DepsMut,
+    info: MessageInfo,
+    to: String,
+    token_id: String,
+    amount: Uint128,
+) -> Result<Response, ContractError> {
+    let from_addr = info.sender.clone();
+    decrease_balance(deps.branch(), from_addr.clone(), token_id.clone(), amount)?;
+
+    let to_addr = validate_address(deps.as_ref(), to)?;
+    update_balance(deps, to_addr, token_id.clone(), amount)?;
+
+    Ok(Response::new().add_attribute("action", "transfer").add_attribute("token_id", token_id))
+}
